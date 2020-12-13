@@ -1,0 +1,984 @@
+# Вы можете расположить сценарий своей игры в этом файле.
+init python:
+
+    # можно и со стандартной функцией Animation,
+    # но просили с этой:
+    def Ani(img_name, frames, delay=.1, loop=True, reverse=True, effect=None, start=1, ext="png", **properties):
+        args = []
+        for i in range(start, start + frames):
+            args.append(renpy.display.im.image(img_name + str(i) + "." + ext))
+            if reverse or loop or (i < start + frames - 1):
+                args.append(delay)
+                args.append(effect)
+        if reverse: # обратная анимация, если нужна
+            for i in range(start + frames - 2, start, -1):
+                args.append(renpy.display.im.image(img_name + str(i) + "." + ext))
+                if loop or (i > start + 1):
+                    args.append(delay)
+                    args.append(effect)
+        return anim.TransitionAnimation(*args, **properties)
+    # время появления/затухания звуков
+    fade_time = 1.0
+    # регистрируем каналы, чтобы звуки не прерывали друг друга
+    channels = ["rain", "thunder1", "thunder2", "thunder3", "bal.ogg"]
+    for i in channels:
+        renpy.music.register_channel(i, "sfx", True)
+    # воспроизводим звуки на своих каналах
+    # либо на канале sound, если нужный канал не зарегистрирован
+    def splay(name, channel=None, loop=False, fadein=fade_time, fadeout=fade_time):
+        if not channel in channels:
+            channel = None
+        if channel is None:
+            if name in channels:
+                channel = name
+            else:
+                channel = "sound"
+        fn = "music/" + name + ".ogg"
+        renpy.music.play(fn, channel=channel, loop=loop, fadeout=fadeout, fadein=fadein)
+    # постепенно останавливаем звуки или один звук, если на входе не список
+    def sstop(channel=channels, fadeout=fade_time):
+        if isinstance(channel, list):
+            for i in channel:
+                renpy.music.stop(i, fadeout=fadeout)
+        else:
+            renpy.music.stop(channel, fadeout=fadeout)
+    # новое положение молний
+    xa = renpy.random.random()
+    def newxa():
+        global xa
+        xa = renpy.random.random()
+        renpy.restart_interaction()
+    # функция → action
+    SPlay = renpy.curry(splay)
+    SStop = renpy.curry(sstop)
+    NewXA = renpy.curry(newxa)
+
+
+# экран для дождя и грома
+screen Rain:
+    # включаем и выклюяаем дождь вместе с экраном
+    on 'show' action SPlay("rain", loop=True)
+    # можно остановить только дождь SStop("rain"),
+    # тогда начавшийся гром догремит и стихнет сам
+    on 'hide' action SStop()
+    # псевдо-рандомные раскаты
+    timer 4.5 repeat True action SPlay("thunder1")
+    timer 6.5 repeat True action SPlay("thunder2")
+    timer 15.0 repeat True action SPlay("thunder3")
+    # картинка с молниями
+    timer .1 repeat True action NewXA()
+    add "light":
+        xalign xa
+    # дождь
+    add "rain":
+        alpha .15
+
+init:
+    # пустая картинка
+    image none = Null(1, 1)
+    # анимация дождя
+    image rain = Ani("rain", 5, .1, reverse=False)
+    # анимация молнии
+    image lightning = Ani("lightning", 3, .025)
+    # мерцание молнии
+    image light:
+        yalign 0 yanchor 0
+        # пусто
+        "none"
+        4.5
+        xzoom 1.0
+        "lightning"
+        .1
+        "none"
+        .1
+        "lightning"
+        .1
+        "none"
+        1.5
+        # зеркальное отражение
+        xzoom -1.0
+        "lightning"
+        .1
+        "none"
+        .05
+        "lightning"
+        .1
+        repeat
+# Определение персонажей игры.
+define a = Character('Мортиэль', color="#8b0000")
+define d = Character('Аутдориэль', color="#e0ffff")
+define k = Character('Ариендель', color="#fdceff")
+define n = Character('Наксанис', color="#4b0082")
+define p = Character("Свинья", color="#ffcc77")
+# Вместо использования оператора image можете просто
+# складывать все ваши файлы изображений в папку images.
+# Например, сцену bg room можно вызвать файлом "bg room.png",
+# а eileen happy — "eileen happy.webp", и тогда они появятся в игре.
+
+# Игра начинается здесь:
+
+label start:
+
+    play music "music/Cave.ogg"
+
+
+
+    transform left8:
+     xalign 0.8
+     yalign 1.0
+
+    transform right2:
+     xalign 0.2
+     yalign 1.0
+    transform rightish:
+     xalign 0.8
+     yalign 1.0
+    transform leftish:
+     xalign 0.75
+     yalign 1.0
+    transform left35:
+      xalign 0.35
+      yalign 1.0
+
+
+    scene bg black
+    k "Как здесь темно!"
+    with Dissolve(.8)
+    a "Осторожней, тут ступеньки..."
+    with Dissolve(.8)
+    d "Я зажгу факел."
+    with Dissolve(.8)
+    show bg cave behind small
+
+    show k nov at left8
+    k "Посмотрите: кажется это какой-то древний артефакт."
+    with Dissolve(.8)
+    "Подойти поближе?"
+    menu:
+        "Да.":
+            jump choise1_yes
+        "Нет.":
+            jump choise1_no
+
+
+
+label choise1_yes:
+    $ menu_flag = True
+    scene bg cave
+    show crystal save
+    with Dissolve(.5)
+    pause .5
+    jump choise1_done
+
+label choise1_no:
+    $ menu_flag = False
+    scene bg cave
+    show k nov at left8
+    k "По крайней мере, мы должны это запечетлить. "
+    with Dissolve(.8)
+
+    image d animated:
+        "d nov"
+        pause .8
+        "d nov scary"
+        pause .8
+        repeat
+    show d animated
+
+    image d ansmile:
+        "d"
+        pause .8
+        "d smile"
+        pause .8
+        repeat
+
+
+    image d anscary:
+        "d"
+        pause .8
+        "d scary"
+        pause .8
+        repeat
+
+    image k ansmile:
+        "k"
+        pause .8
+        "k smile"
+        pause .8
+        repeat
+
+
+    image k anscary:
+        "k"
+        pause .8
+        "k scary"
+        pause .8
+        repeat
+
+    image a ansmile:
+        "a"
+        pause .8
+        "a smile"
+        pause .8
+        repeat
+
+
+    image a anscary:
+        "a"
+        pause .8
+        "a scary"
+        pause .8
+        repeat
+
+
+
+
+
+
+
+    d "Давайте уйдем, мне становится не по себе от этого места."
+    with Dissolve(.8)
+    show a nov at right2
+    a "Зачем мы тогда сюда шли! Ариендель, сфотографируй и пойдемте."
+    with Dissolve(.8)
+    scene bg cave
+    scene bg white
+    with Dissolve(.5)
+    pause .3
+    scene bg cave
+
+    jump choise1_done
+
+label choise1_done:
+    scene bg cave
+    show crystal broke
+    show d nov scary at leftish
+    d "Я сломала! Уходим."
+    with Dissolve(.8)
+    show a nov at left35
+    a "Давайте возьмем их себе. Вдруг эти камни драгоценные и их можно продать."
+    with Dissolve(.8)
+    show k nov at left
+    k "Тем более их трое, каждому по камню."
+    with Dissolve(.8)
+
+    scene bg white
+    with Dissolve(.5)
+    pause .3
+    scene bg cave
+
+
+
+label zlo:
+    play music "music/bal.ogg"
+
+    scene bg black
+    "Тем временем..."
+    with Dissolve(.8)
+    show zlo
+
+    n "Я НАКСАНИС, И Я... ВЕЧЕН!!!"
+    with Dissolve(.8)
+    n "Я поставлю этот мир на колени как и 1000 лет назад. И в это раз никто не остановит меня."
+    with Dissolve(.8)
+    n "Кристалл мертв и тени заполнят этот мир. "
+    with Dissolve(.8)
+    n "Мои силы возвращаются. Пускай же начнется пир и задушит всю жизнь."
+    with Dissolve(.8)
+label zaklinnie:
+    image fire = Movie(play="fire.ogv", size=(1280, 720), xpos=0, ypos=0, xanchor=0, yanchor=0)
+
+    n "Да возвратится тьма к источнику живых вод, и да сделается земля кровоточащей, и пусть жизнь производит боль, страдания и смерть."
+    with Dissolve(1.5)
+    show fire behind zlo
+    show magic:
+        xalign  0.5 yalign  0.5 xanchor 0.5 yanchor 0.5 rotate 0
+        alignaround (0.8,  0.8)
+        linear 50.0 yalign  0.0 clockwise circles 10 rotate 360
+        repeat
+    $ renpy.pause(5.0, hard=True)
+
+    n "Как только свет покинет мир, человечество настигнут печали и убытки. Так заполниться же все тьмой и я обрету силу."
+    with Dissolve(.8)
+    hide fire
+    with Dissolve(1.5)
+    pause .5
+label poverhnost:
+    play music "music/World.ogg"
+
+    scene vill
+    show d ansmile at left
+    d "Хорошо, что мы выбрались оттуда. "
+    with Dissolve(.8)
+    show d anscary at left
+    d "АА-аааа. "
+    d "Что с вами и почему я так странно себя чувствую?"
+    with Dissolve(.8)
+    show k anscary
+    k "Я не знаю. С нами что-то произошло в той пещере."
+    with Dissolve(.8)
+    show a ansmile at right
+    a "А мне нравятся мои новые крылья."
+    with Dissolve(.8)
+    k "Мы должны вернуться в пещеру и найти ответы."
+    with Dissolve(.8)
+    a "Я думаю в этом нет смысла.  Когда мы уходили я кое-что прихватил. Но я не понимаю, что там написано."
+    with Dissolve(.8)
+    d "Давай я посмотрю."
+    with Dissolve(.8)
+    pause .5
+    scene bg white
+    show svitok
+    "1000 лет назад Зло почти подчинило этот мир. Только Абсолютный Кристалл и 3 героя смогли запечатать зло туда, где оно будет покоиться. Абсолютный Кристалл был скрыт от глаз смертных, ибо они могли разрушить его и впустить Зло в этот мир.*"
+    with Dissolve(.5)
+    pause .5
+    scene vill
+    show d anscary
+    d "О нет, я знала, что это была плохая идея"
+    with Dissolve(.8)
+    show k at right
+    k "Значит мы должны отыскать зло…"
+    with Dissolve(.8)
+    show a at left
+    a "…И запечатать его обратно. Это понятно. Но где оно находится?"
+    with Dissolve(.8)
+    d "Подождите, тут еще что-то. Наверное это карта"
+    with Dissolve(.8)
+    k "Дай мне."
+    with Dissolve(.5)
+    pause .5
+    scene bg white
+    show karta
+    k "Я узнаю эту карту. Это же наш остров!"
+    with Dissolve(.8)
+    k "Ага, отмечено 2 места. Крайний восток, там где мы, и запад – видимо это то место, где и покоилось зло."
+    with Dissolve(.8)
+    a "Тогда идем на запад?"
+    with Dissolve(.8)
+    d "Да, только как мы туда пойдем? Путь долгий, да и на западе одни руины старого мира."
+    with Dissolve(.8)
+    a "Пойдем через город и соберем запасы. Нужно запостись едой и водой на несколько дней."
+    with Dissolve(.8)
+    k "Решено!"
+    with Dissolve(.8)
+
+    show krug:
+        xalign 0.7
+        yalign 0.44
+        linear 2.0 xalign 0.67 yalign 0.4
+    pause 2.5
+    with Dissolve(.5)
+    pause .5
+    scene pole
+    show k at right
+    k "Вы думали как мы остановим зло?"
+    with Dissolve(.8)
+    show d
+    d "Не знаю, видимо мы найдем ответы на все наши вопросы по пути."
+    with Dissolve(.8)
+    d "Ариендель, на карте больше ничего не отмечено?"
+    with Dissolve(.8)
+    k "Нет, к нашему сожалению."
+    with Dissolve(.8)
+    show a scary at left
+    a "Тихо! Я что-то слышу. Прячтесь."
+    with Dissolve(.8)
+    show k anscary at leftish
+    k "Что это такое?"
+    with Dissolve(.8)
+    show d anscary
+    d "ЭТО МЕДВЕДЬ!!!"
+    with Dissolve(.8)
+    a "Бежим!"
+    with Dissolve(.5)
+    pause .5
+    scene pole
+    show med at left
+    show d anscary at left35
+    k "Аутдориэль, НЕ-ЕТ!"
+    with Dissolve(.8)
+    "Спасаться самим или помочь Аутдориэль"
+    menu:
+        "Спасаться.":
+            jump choise2_yes
+        "Помочь.":
+            jump choise2_no
+
+
+
+label choise2_yes:
+    $ menu_flag = True
+    show pole behind med
+    show  d anscary at left35
+    d "Похоже, это все"
+    with Dissolve(.8)
+    d "Лучше закрыть глаза"
+    with Dissolve(.8)
+    image med dasha:
+        "med"
+        pause .5
+        "med d"
+        pause .5
+        repeat
+    show med dasha
+    pause 3.5
+    with Dissolve(.5)
+    pause .5
+
+    jump choise2_done
+
+label choise2_no:
+    $ menu_flag = False
+    show pole behind med
+    show  d anscary at left35
+    d "Похоже, это все"
+    with Dissolve(.8)
+    d "Лучше закрыть глаза"
+    with Dissolve(.8)
+    show a at leftish
+    a "Умри!!!"
+    image med al:
+        "med"
+        pause .5
+        "med a"
+        pause .5
+        repeat
+    show med al
+    pause 3.5
+    with Dissolve(.5)
+    pause .5
+
+
+
+    jump choise2_done
+
+label choise2_done:
+    scene bg white
+    with Dissolve(0.5)
+    pause 0.5
+    scene pole
+    show d anscary at right
+    d "Что? Я не умерла? Но как?"
+    with Dissolve(.8)
+    show a ansmile
+    a "Аутдориэль, ты цела!"
+    with Dissolve(.8)
+    d "Да, но как?"
+    with Dissolve(.8)
+    show k ansmile at left
+    k "Похожу, что в той пещере мы обрели еще кое-что... И это новые СИЛЫ!"
+    with Dissolve(.8)
+    k "До вечера мы должны быть в Холвиле. Поспешим!"
+    with Dissolve(.5)
+    pause .5
+    scene bg white
+    show karta
+    show krug:
+        xalign 0.67
+        yalign 0.4
+        linear 2.0 xalign 0.62 yalign 0.41
+    pause 3.5
+    label gorod:
+    scene vill
+    show k ansmile at left
+    k "Мы уже пришли?"
+    with Dissolve(.8)
+    show a anscary at right
+    a "Нет."
+    with Dissolve(.8)
+    k "Мы уже пришли?"
+    with Dissolve(.8)
+    a "..."
+    with Dissolve(.8)
+    k "А сейчас?"
+    with Dissolve(.8)
+    a "НЕТ."
+    with Dissolve(.8)
+    k "А сейчас?"
+    with Dissolve(.8)
+    a "Если из твоего рта вылетет хоть одно поганое слово..."
+    with Dissolve(.8)
+    show d smile
+    d "Смотрите, мы пришли!"
+    with Dissolve(.8)
+    a "Неужели он заткнется..."
+    with Dissolve(.8)
+    k "Никогда."
+    with Dissolve(.8)
+    a "Надеюсь, что ваше хорошее настроение испортится после того, как вы увидите это."
+    with Dissolve(.8)
+    scene vill
+    show ten at left
+    show d anscary at right
+    d "Что же с ними стало?"
+    with Dissolve(.8)
+    hide d anscary
+    hide ten
+    show a
+    a "Думаю то же самое, что и с тем медведем."
+    with Dissolve(.8)
+    a "Что же будем делать?"
+    with Dissolve(.8)
+    menu:
+        "Пойти в город.":
+            jump choise3_yes
+        "Отступить и придумать что-то другое.":
+            jump choise3_no
+
+
+
+label choise3_yes:
+    $ menu_flag = True
+    scene vill
+    show  a anscary at left
+    a "Если же мы пойдем туда, то нужно помнить, что это обычные беззащитные люди"
+    with Dissolve(.8)
+    show k anscary
+    k "Они могут на нас напасть и убить."
+    with Dissolve(.8)
+    a "Да ты прав"
+    with Dissolve(.8)
+    show d at right
+    d "Тогда попытаемся просто обезвередить их."
+    with Dissolve(.8)
+    show  a at left
+    a "Хорошая мысль"
+    with Dissolve(.8)
+    d "У нас есть план?"
+    with Dissolve(.8)
+    a "Попытаемся пробраться незаметно"
+    with Dissolve(.8)
+    show k ansmile
+    k "Хорошая мысль"
+    with Dissolve(.8)
+    a "Мы знаем этот город, потому пройдем сзади дома оружейника и к прилавку"
+    with Dissolve(.8)
+    d "Надеюсь, никто нас не заметит"
+    with Dissolve(.8)
+    k"Я кого-то слышу, и он один"
+    with Dissolve(.8)
+    d "А вот и первые трудности"
+    with Dissolve(.8)
+    k "Нам не пройти незамечеными мимо его"
+    with Dissolve(.8)
+    a "Тогда план Б: Ариендель обезвредит его и мы бежим"
+    with Dissolve(.8)
+    a "Вперед! Только тихо."
+    with Dissolve(.8)
+    scene vill
+
+
+    image ten dasha:
+        "ten"
+        pause .5
+        "ten k"
+        pause .5
+        repeat
+    show k at left
+    "Получай!"
+    show ten dasha at right
+    pause 3.5
+    with Dissolve(.5)
+    pause .5
+    scene vill
+    show a at left
+    a "Теперь выбираемся обратно"
+    with Dissolve(.8)
+    show k scary
+    k "Нас заметили"
+    with Dissolve(.8)
+    show d smile at right
+    d "Бежим!!!"
+    with Dissolve(.8)
+    pause 3.5
+    with Dissolve(.5)
+    pause .5
+
+    jump choise3_done
+
+label choise3_no:
+    $ menu_flag = False
+    scene pole
+    show k anscary at left
+    k "Мы прошли город, а я так хочу есть."
+    with Dissolve(.8)
+    show a anscary
+    a "Тоесть ты предлагаешь вернуться, и поубивать всех невинных?"
+    with Dissolve(.8)
+    show d anscary at right
+    d "...или быть убитыми ими же."
+    with Dissolve(.8)
+    a "Слишком опасно и глупо."
+    with Dissolve(.8)
+    k "Тогда где же мы найдем еду?"
+    with Dissolve(.8)
+    a "Хочу вам напомнить, что вокруг лес, где куча вкусных аппетитных животных."
+    with Dissolve(.8)
+    k "Видимо, с новыми силами ты начал питаться тенью?"
+    with Dissolve(.8)
+    d "Девочки, не ссортесь. Сегодня мы веганки. Я нашла дикую малину и странные зернышки."
+    with Dissolve(.8)
+    d "Зернышки есть не будем, а вот малину можно."
+    with Dissolve(.8)
+    a "Собирайте и пойдемте дальше. Надвигается ночь."
+    pause 3.5
+    with Dissolve(.5)
+    pause .5
+
+
+
+    jump choise3_done
+
+label choise3_done:
+    scene bg white
+    show karta
+    show krug:
+        xalign 0.62
+        yalign 0.41
+        linear 2.0 xalign 0.55 yalign 0.46
+    pause 3.5
+    scene les night
+    show d scary
+    d "Фух, ушли. Жутко."
+    with Dissolve(.8)
+
+label rain:
+    stop music
+    scene les night with None
+    show screen Rain
+    with dissolve
+    show k anscary at left
+    k "Кажется, дождь собирается... Побежали, я вижу навес."
+    with Dissolve(.8)
+    show d anscary at right
+    d "Нужно срочно найти место для начлега."
+    with Dissolve(.8)
+    d "Я вижу старый домик, и, возможно, там никого нет."
+    with Dissolve(.8)
+    show a anscary
+    a "Только мы этого не знаем наверняка. И что там может быть тоже."
+    with Dissolve(.8)
+    d "Вспомните, что нас чуть не разорвал медведь. И в лесу слишком опасно."
+    with Dissolve(.8)
+    a "Да только дождь слишком сильный, нужно решать"
+    with Dissolve(.8)
+    menu:
+        "Остаться под навесом.":
+            jump choise4_yes
+        "Отправиться в домик на свой страх и риск":
+            jump choise4_no
+
+
+
+label choise4_yes:
+
+    pause
+    hide screen Rain
+    with dissolve
+    scene les night
+    show k ansmile at left
+    k "Кажется,  дождь кончился."
+    with Dissolve(.8)
+    play music "music/World.ogg"
+    show d anscary
+    d "Кх-кх"
+    with Dissolve(.8)
+    show a anscary at right
+    a "Что случилось, Аутдориэль?"
+    with Dissolve(.8)
+    d "Я плохо себя чувствую."
+    with Dissolve(.8)
+    a "У нее жар."
+    with Dissolve(.8)
+    k "И что же нам делать?"
+    with Dissolve(.8)
+    a "Я попытаюсь ее вылечить, но для этого мне нужен лист Феминлиска. Ариендель, знаешь как он выглядет?"
+    with Dissolve(.8)
+    k "Да."
+    with Dissolve(.8)
+    a "Тогда поторопись. Чем быстрее ты его найдешь, тем легче будет вылечить это."
+    with Dissolve(1.5)
+    pause(.5)
+
+
+    jump choise4_done
+label choise4_no:
+    pause
+    hide screen Rain
+    with dissolve
+    scene dom
+    show k ansmile at left
+    k "Кажется,  дождь кончился."
+    with Dissolve(.8)
+    play music "music/World.ogg"
+    show d anscary
+    d "АААЙ"
+    show a anscary at right
+    a "Что случилось, Аутдориэль?"
+    with Dissolve(.8)
+    show k anscary at left
+    d "Меня что-то укусило."
+    with Dissolve(.8)
+    a "Это паук. Видимо, проклятие усилило его яд."
+    with Dissolve(.8)
+    k "И что же нам делать?"
+    with Dissolve(.8)
+    a "Я попытаюсь ее вылечить, но для этого мне нужен лист Феминлиска. Ариендель, знаешь как он выглядет?"
+    with Dissolve(.8)
+    k "Да."
+    with Dissolve(.8)
+    a "Тогда поторопись. Чем быстрее ты его найдешь, тем легче будет вылечить это."
+    with Dissolve(.8)
+
+    jump choise4_done
+label choise4_done:
+    play music "music/World.ogg"
+    scene les night
+    show k ansmile at left
+
+    k "Кажется нашел, это он"
+    with Dissolve(.8)
+    scene bg white
+    show plant
+    k "Нужно поторопиться"
+    with Dissolve(.8)
+    scene les night
+    with Dissolve(0.5)
+    pause .5
+    show k at left
+    k "Он?"
+    with Dissolve(.8)
+    show a at right
+    a "Да, сейчас станет легче. А теперь нам всем нужно поспать"
+
+    with Dissolve(1.5)
+    pause .5
+    scene les day
+    show a ansmile at left
+
+    a "Доброе утро. Как себя чувствуешь?"
+    with Dissolve(.8)
+    show d ansmile
+    d "Уже хорошо. Спасибо тебе, Мортиэль."
+    with Dissolve(.8)
+    a "Не стоит благодарности, я всегда рад тебе помочь."
+    with Dissolve(.8)
+    show k ansmile at right
+    k "Аутдориэль, ты как?"
+    with Dissolve(.8)
+    d "Хорошо, все хорошо."
+    with Dissolve(.8)
+    a "Нужно уходить. Нельзя забывать о нашей миссии."
+    with Dissolve(.8)
+    scene bg white
+    show karta
+    show krug:
+        xalign 0.55
+        yalign 0.46
+        linear 2.0 xalign 0.49 yalign 0.43
+    pause 3.5
+
+label table:
+    scene pole
+    show d scary at left
+    d "Я так устала"
+    with Dissolve(.8)
+    show a scary
+    a "Мне кажется, что мы идем целую вечность."
+    with Dissolve(.8)
+    a "И это только начало."
+    with Dissolve(.8)
+    d "Мы заблудились."
+    with Dissolve(.8)
+    show k at right
+    k "Мы идем правильно, посмотрите. На карте указатель: мы можем отправиться через горы, или же опять в лес."
+    with Dissolve(.8)
+    d "Никакого леса, с меня хватит."
+    with Dissolve(.8)
+    a "Никаких гор, мы скорее там умрем, чем дойдем."
+    with Dissolve(.8)
+    k "Похоже, что перед нами стоит выбор: лес или горы?"
+    with Dissolve(.8)
+    menu:
+        "Пойти через лес.":
+            jump choise5_yes
+        "Пойти через горы.":
+            jump choise5_no
+label choise5_yes:
+    scene les night
+    show d anscary
+    d "Не могу поверить, что мы идем через лес. Видимо, вам ничего не страшно?"
+    with Dissolve(.8)
+    show a at left
+    a "Да просто горы более опасны. Обвалы, да и мы даже не знаем, что нас может ожидать"
+    with Dissolve(.8)
+    show d
+    d "А в лесу поют птички..."
+    with Dissolve(.8)
+    a "В лесу мы имеем доступ к еде."
+    with Dissolve(.8)
+    d "И к диким животным."
+    with Dissolve(.8)
+    a "Не вижу смысла это продолжать. Лучше обдумаем план действий."
+    with Dissolve(.8)
+    show k at right
+    k "А никакого плана нет, мы рискуем всем."
+    with Dissolve(.8)
+    a "Вообще, план есть."
+    with Dissolve(.8)
+    k "И какой же?"
+    with Dissolve(.8)
+    a "Этот Наксанис не просто злой тип, и он опаснее  всех и всего, что нам повстречалось до этого."
+    with Dissolve(.8)
+    d "Понятно..."
+    with Dissolve(.8)
+    a "Так вот, предлагаю атаковать сообща. Если мы соеденим наши силы, шанс на победу останется."
+    with Dissolve(.8)
+    scene bg white
+    show karta
+    show krug:
+        xalign 0.49
+        yalign 0.43
+        linear 2.0 xalign 0.45 yalign 0.48
+        linear 2.0 xalign 0.38 yalign 0.44
+    pause 3.5
+
+
+
+
+    jump choise5_done
+label choise5_no:
+    scene rock
+    show a anscary
+    a "Не могу поверить, что мы идем через горы. Видимо, вам ничего не страшно?"
+    with Dissolve(.8)
+    show d at left
+    d "Да просто лес более опасен. И совсем не понятно, что мы можем встретить еще: стая диких волков, от которых мы уж точно не убежим."
+    with Dissolve(.8)
+    show a
+    a "А горы - это молчаливые камни..."
+    with Dissolve(.8)
+
+    d "Зато спокойней, и можно не бояться переночевать."
+    with Dissolve(.8)
+    a "Действительно, какова вероятность, что нас придавит камнями?"
+    with Dissolve(.8)
+    show k at right
+    k "Не вижу смысла это продолжать. Лучше обдумаем план действий."
+    with Dissolve(.8)
+    d "А никакого плана нет, мы рискуем всем."
+    with Dissolve(.8)
+    a "Вообще, план есть."
+    with Dissolve(.8)
+    d "И какой же?"
+    with Dissolve(.8)
+    a "Этот Наксанис не просто злой тип, и он опаснее  всех и всего, что нам повстречалось до этого."
+    with Dissolve(.8)
+    d "Понятно..."
+    with Dissolve(.8)
+    a "Так вот, предлагаю атаковать сообща. Если мы соеденим наши силы, шанс на победу останется."
+    with Dissolve(.8)
+    scene bg white
+    show karta
+    show krug:
+            xalign 0.49
+            yalign 0.43
+            linear 2.0 xalign 0.45 yalign 0.37
+            linear 2.0 xalign 0.38 yalign 0.44
+    pause 3.5
+
+
+
+
+    jump choise5_done
+label choise5_done:
+    scene les night
+    a "А теперь давайте выспемся. Завтра решающий день."
+    with Dissolve(.8)
+    d "Поддерживаю, я так устала."
+    with Dissolve(.8)
+    k "Спокойной ночи."
+    with Dissolve(.8)
+    with Dissolve(1.5)
+    pause 0.8
+
+label final:
+    play music "music/Battle.ogg"
+    scene les day
+    show k
+    k "Да кто это меня будет?"
+    with Dissolve(.8)
+    show a at right
+    a "Вставай, уже пора."
+    with Dissolve(.8)
+    show d at left
+    d "Не забывай, что нам многое сегодня предстоит. И на то, чтобы выспаться, нет времени"
+    with Dissolve(.8)
+    k "Если уже почти все собрались, тогда идем."
+    with Dissolve(.8)
+    scene bg white
+    show karta
+    show krug:
+        xalign 0.38
+        yalign 0.43
+
+        linear 2.0 xalign 0.35 yalign 0.44
+    pause 3.5
+    scene zamok
+
+    show k scary at left
+    k "Готовы?"
+    with Dissolve(.8)
+    show d scary
+    d "Наверное"
+    with Dissolve(.8)
+    show a scary at right
+    a "Что это?"
+    with Dissolve(.8)
+    k "Видимо, это он."
+    with Dissolve(.8)
+    hide k scary
+    show zlo m at left
+    n "Ах-ха-ха-ха! А вот и наши мышки уже в ловушки."
+    with Dissolve(.8)
+    d "Ты пожалеешь."
+    with Dissolve(.8)
+    n "Попробуй."
+    with Dissolve(.8)
+    image zlo al:
+        "zlo m"
+        pause .5
+        "zlo a"
+        pause .5
+        repeat 4
+    show zlo al at left
+    n "Смешно. Теперь мой ход."
+    with Dissolve(.8)
+    image d al:
+        "d scary"
+        pause .5
+        "ten"
+        pause .5
+        repeat 4
+    show d al
+    d "ААААА."
+    scene zamok
+    show a at left
+    a "Помните о нашем плане? Скоро все закончится. Вперед!"
+    with Dissolve(.8)
+    show d
+    d "Соеденим наши силы."
+    with Dissolve(.8)
+    show k at right
+    k "Покончим с этим."
+    with Dissolve(.8)
+    scene zamok
+    image zlo al1:
+        "zlo m"
+        pause .5
+        "zlo m vse"
+        pause .5
+        repeat
+    show zlo al1
+    "Да, мы выиграли!"
+
